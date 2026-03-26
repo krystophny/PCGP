@@ -34,18 +34,18 @@ class PCGP_Kernel_{{ loop.index0 }}(gpytorch.kernels.Kernel):
                 self.register_constraint(raw_name, gpytorch.constraints.Positive())
                 self.param_constraints[param_name] = gpytorch.constraints.Positive() 
                            
-        for param_name in parameter_modifications:
+        for param_name, (value, requires_grad, constraint) in parameter_modifications.items():
             if param_name in self.parameters:
                 raw_name = f"raw_{param_name}"
-                value, requires_grad, constraint = parameter_modifications[param_name]
-                param = torch.nn.Parameter(torch.tensor([value]), requires_grad=requires_grad)
-                self.register_parameter(raw_name, param)
+                raw_param = getattr(self, raw_name)
+                # handle constraints
                 if constraint and requires_grad:
                     CM = ConstraintsModifications(constraint)
-                    init_val = value if CM.is_fulfilled(value) else CM.init_val_from_constraint()
+                    value = value if CM.is_fulfilled(value) else CM.init_val_from_constraint()
                     self.register_constraint(raw_name, constraint)
                     self.param_constraints[param_name] = constraint
-                    self.set_param(param_name, init_val)
+                self.set_param(param_name, value)   
+                raw_param.requires_grad_(requires_grad)
 
     def _set_param(self, param_name, value):
         raw_name = f"raw_{param_name}"
@@ -66,7 +66,7 @@ class PCGP_Kernel_{{ loop.index0 }}(gpytorch.kernels.Kernel):
         return getattr(self, f"raw_{param_name}")
 
     def set_param(self, param_name, value):
-        if param_name in self.param_constraints:
+        if param_name in self.parameters:
             self._set_param(param_name, value)
         else:
             raw_name = f"raw_{param_name}"

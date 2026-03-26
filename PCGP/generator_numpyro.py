@@ -2,7 +2,7 @@ import os
 from jinja2 import Template
 from sympy.printing.pycode import pycode
 import sympy
-from .diffeq_kernel import kernel_matrix
+from .symbolic_kernels import symbolic_parametrization_kernel
 import inspect
 
 
@@ -88,7 +88,7 @@ def write_numpyro_forward_body(B, parameters, number_of_input_dimensions):
     :param number_of_input_dimensions: int, number of input dimensions
     :return: str, code for the body of the forward function
     """
-    kernel_object = kernel_matrix(B, parameters, number_of_input_dimensions=number_of_input_dimensions) 
+    kernel_object = symbolic_parametrization_kernel(B, parameters, number_of_input_dimensions=number_of_input_dimensions) 
     symbolic_kernel = kernel_object.get_symbolic_kernel()
     num_tasks = symbolic_kernel.shape[0]
 

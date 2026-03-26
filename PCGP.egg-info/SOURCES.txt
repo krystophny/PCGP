@@ -1,3 +1,4 @@
+LICENSE
 README.md
 pyproject.toml
 PCGP/__init__.py
@@ -5,6 +6,9 @@ PCGP/constraint_handling.py
 PCGP/generator_gpytorch.py
 PCGP/generator_numpyro.py
 PCGP/gpytorch_tools.py
+PCGP/symbolic_kernels.py
 PCGP.egg-info/PKG-INFO
 PCGP.egg-info/SOURCES.txt
+PCGP.egg-info/dependency_links.txt
+PCGP.egg-info/requires.txt
 PCGP.egg-info/top_level.txt

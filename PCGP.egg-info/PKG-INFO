@@ -1,5 +1,18 @@
 Metadata-Version: 2.4
 Name: PCGP
-Version: 0.1.0
-Summary: This is the first version of the package PCGP (physics-consistent Gaussian Processes), that uses parametrization to find solutions for differential equations and related issues.
+Version: 1.1.0
+Summary: This is the updated version of the package PCGP (physics-consistent Gaussian Processes), that uses parametrization to find solutions for differential equations and related issues.
 Author-email: Johanna Moser <j.moser@tugraz.com>
+License-File: LICENSE
+Requires-Dist: einops>=0.8.1
+Requires-Dist: gpytorch>=1.14
+Requires-Dist: jax>=0.6.0
+Requires-Dist: Jinja2>=3.1.6
+Requires-Dist: numpy>=2.3.2
+Requires-Dist: numpyro>=0.18.0
+Requires-Dist: sympy>=1.14.0
+Requires-Dist: torch>=2.7.0
+Provides-Extra: experiments
+Requires-Dist: matplotlib>=3.7; extra == "experiments"
+Requires-Dist: jupyter>=1.0; extra == "experiments"
+Dynamic: license-file

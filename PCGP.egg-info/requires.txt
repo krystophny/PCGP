@@ -1,0 +1,12 @@
+einops>=0.8.1
+gpytorch>=1.14
+jax>=0.6.0
+Jinja2>=3.1.6
+numpy>=2.3.2
+numpyro>=0.18.0
+sympy>=1.14.0
+torch>=2.7.0
+
+[experiments]
+matplotlib>=3.7
+jupyter>=1.0

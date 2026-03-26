@@ -27,7 +27,7 @@ class symbolic_parametrization_kernel:
         self.Dy = sp.symbols(f'Dy1:{self.number_of_input_dimensions + 1}')
         if not base_kernel:
             amplitude, lengthscale = sp.symbols("amplitude, lengthscale")
-            self.base_kernel = amplitude*sp.exp(-1/(2*lengthscale**2)*sum((xi - yi)**2 for xi, yi in zip(self.x, self.y)))
+            self.base_kernel = amplitude*sp.exp(-1/(2*lengthscale)*sum((xi - yi)**2 for xi, yi in zip(self.x, self.y)))
         else:
             self.base_kernel = base_kernel(self.x, self.y)
         self.B = B
