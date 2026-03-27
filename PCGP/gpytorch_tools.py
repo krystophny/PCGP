@@ -25,7 +25,7 @@ def train(model, likelihood, parameters, train_x, train_y, num_tasks, test_x=Non
         parameters_during_training = {}
         for key in parameters:
              parameters_during_training[key] = []
-        parameters_during_training["noise"] = torch.zeros((num_tasks, training_iter), device = device )   
+        #parameters_during_training["noise"] = torch.zeros((num_tasks, training_iter), device = device )   
         loss_landscape = []
         optimizer = torch.optim.Adam(params, lr=0.1)
         marginal_log_likelihood  = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
@@ -36,11 +36,11 @@ def train(model, likelihood, parameters, train_x, train_y, num_tasks, test_x=Non
                 
                 for key in parameters:
                     parameters_during_training[key].append(copy.deepcopy(model.covar_module.get_param(key).detach()))
-                for t in range(num_tasks):
-                    parameters_during_training["noise"][t, i] = likelihood.task_noises[t]    
+                #for t in range(num_tasks):
+                #    parameters_during_training["noise"][t, i] = likelihood.task_noises[t]    
                 loss_landscape.append(loss.detach())
-                if noise_constraints and likelihood.task_noises.requires_grad:
-                    noise_constraints.enforce_constraints(likelihood.raw_task_noises)
+                #if noise_constraints and likelihood.task_noises.requires_grad:
+                #    noise_constraints.enforce_constraints(likelihood.raw_task_noises)
                 if i%100==0 and not device=="cuda":
                     print("iteration: ", i, "loss:", loss.item())
                 loss.backward(retain_graph = True)
@@ -74,9 +74,12 @@ def train(model, likelihood, parameters, train_x, train_y, num_tasks, test_x=Non
     #return parameters_during_training, inverse_hessian, hessian, order_of_parameters_with_gradients, loss_landscape, test_loss     
 
 
-def predict(model, likelihood, test_x = torch.linspace(0, 1, 51)):
+def predict(model, likelihood=None, test_x = torch.linspace(0, 1, 51)):
     with torch.no_grad(), gpytorch.settings.fast_pred_var(), gpytorch.settings.observation_nan_policy("mask"):
-        predictions = likelihood(model(test_x))
+        if likelihood:
+            predictions = likelihood(model(test_x))
+        else:
+            predictions = model(test_x)
         mean = predictions.mean
         lower, upper = predictions.confidence_region()
     return mean, lower, upper
