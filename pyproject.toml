@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "PCGP"
-version = "1.0.0"
-description = "This is the first version of the package PCGP (physics-consistent Gaussian Processes), that uses parametrization to find solutions for differential equations and related issues."
+version = "1.1.0"
+description = "This is PCGP (physics-consistent Gaussian Processes), that uses parametrization and autonomous solutions to find solutions for differential equations and related issues."
 authors = [{ name = "Johanna Moser", email = "j.moser@tugraz.com" }]
 dependencies = [
     "einops>=0.8.1",

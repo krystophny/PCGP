@@ -5,7 +5,6 @@ import sympy as sp
 import numpy as np
 from sympy.printing.pycode import pycode
 from dataclasses import dataclass
-from sympy.printing.pycode import pycode
 from .symbolic_kernels import symbolic_mercer_kernel, symbolic_parametrization_kernel
 
 
@@ -30,7 +29,7 @@ class PCGP_Kernel_{{ loop.index0 }}(gpytorch.kernels.Kernel):
             raw_name = f"raw_{param_name}"
             param = torch.nn.Parameter(torch.ones(1), requires_grad=True)
             self.register_parameter(raw_name, param)   
-            if param_name == "amplitude" or param_name == "lengthscale":
+            if param_name[:-2] == "amplitude" or param_name[:-2] == "lengthscale":
                 self.register_constraint(raw_name, gpytorch.constraints.Positive())
                 self.param_constraints[param_name] = gpytorch.constraints.Positive() 
                            
@@ -73,8 +72,8 @@ class PCGP_Kernel_{{ loop.index0 }}(gpytorch.kernels.Kernel):
             value_tensor = torch.nn.Parameter(torch.tensor([value]))
             self.register_parameter(raw_name, value_tensor)
 
-    def num_outputs_per_input(self, x1, x2):
-        return self.num_tasks
+    #def num_outputs_per_input(self, x1, x2):
+    #    return self.num_tasks
 
     def forward(self, x1, x2, diag=False, **params):
 {{ body }}
@@ -83,9 +82,7 @@ class PCGP_Kernel_{{ loop.index0 }}(gpytorch.kernels.Kernel):
 class PCGP_Model(gpytorch.models.ExactGP):
     def __init__(self, train_x, train_y, likelihood,  parameter_modifications = {}, number_of_input_dimensions = {{ input_dims }}, num_tasks = {{ num_tasks }}, priors = None):
         super().__init__(train_x, train_y, likelihood)
-        self.mean_module = gpytorch.means.MultitaskMean(
-            gpytorch.means.ZeroMean(), num_tasks=num_tasks 
-        )
+        self.mean_module = gpytorch.means.ZeroMean()
         self.num_tasks = num_tasks
         self.number_of_input_dimensions = number_of_input_dimensions
         self.covar_module = ({% for i in range(number_of_kernels) %}
@@ -102,10 +99,14 @@ class PCGP_Model(gpytorch.models.ExactGP):
                 )
 
     def forward(self, x):
-        mean_x = self.mean_module(x)
+        mean_x = self.mean_module(x[:,0]) ##no need for task specific mean since it's zero
         covar_x = self.covar_module(x)
-        return gpytorch.distributions.MultitaskMultivariateNormal(mean_x, covar_x, interleaved = True) 
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x) 
 """)
+
+    
+    
+
 
 @dataclass
 class KernelSpecifics:
@@ -116,6 +117,7 @@ class KernelSpecifics:
 
 class PCGP_Builder:
     def __init__(self):
+        print("You are using the new version of the generator, which is still experimental. If you encounter any issues, please report them to the developer.")
         self.kernels = []
     
     def add_kernel(
@@ -125,15 +127,17 @@ class PCGP_Builder:
         mercer = False,
         Sigma = None,
         base_kernel = None,
-        base_kernel_arguments = None
+        base_kernel_arguments = None,
+        shared_base_kernel = False
         ):
         spec = self._generate_kernel_specifics(
             input_matrix,
-            number_of_input_dimensions,
-            mercer,
-            Sigma,
-            base_kernel,
-            base_kernel_arguments,
+            number_of_input_dimensions = number_of_input_dimensions,
+            mercer = mercer,
+            Sigma=Sigma,
+            base_kernel = base_kernel,
+            base_kernel_arguments = base_kernel_arguments,
+            shared_base_kernel=shared_base_kernel
         )
         self.kernels.append(spec)
 
@@ -151,34 +155,61 @@ class PCGP_Builder:
     def _generate_kernel_specifics(
         self,
         input_matrix,
-        number_of_input_dimensions=1,
+        number_of_input_dimensions=None,
         mercer=False,
         Sigma = None,
         base_kernel=None,
-        base_kernel_arguments=None,) -> KernelSpecifics:
+        base_kernel_arguments=None,
+        shared_base_kernel = False) -> KernelSpecifics:
         
+        if base_kernel_arguments:
+            if number_of_input_dimensions and number_of_input_dimensions != len(base_kernel_arguments):
+                raise ValueError("number_of_input_dimensions does not match length of base_kernel_arguments")
+            eff_input_dims = len(base_kernel_arguments)
+        else:
+            if not number_of_input_dimensions:
+                raise ValueError("Either number_of_input_dimensions or base_kernel_arguments must be provided")
+            eff_input_dims = number_of_input_dimensions
+
         if mercer:
             kernel_object = symbolic_mercer_kernel(input_matrix, Sigma = Sigma, number_of_input_dimensions=number_of_input_dimensions) 
         else: 
-            kernel_object = symbolic_parametrization_kernel(input_matrix, number_of_input_dimensions=number_of_input_dimensions, base_kernel = base_kernel, base_kernel_arguments = base_kernel_arguments) 
+            kernel_object = symbolic_parametrization_kernel(input_matrix, base_kernel = base_kernel, eff_input_dims = eff_input_dims, shared_base_kernel=shared_base_kernel) 
         symbolic_kernel = kernel_object.get_symbolic_kernel()
         num_tasks = symbolic_kernel.shape[0]
+
+        return KernelSpecifics(
+            body=self._get_body(kernel_object, base_kernel_arguments, symbolic_kernel, num_tasks, number_of_input_dimensions),
+            parameters=kernel_object.parameters,
+            input_dims=number_of_input_dimensions,
+            num_tasks=num_tasks,
+        )
+    
+    def _get_body(self, kernel_object, base_kernel_arguments, symbolic_kernel, num_tasks, number_of_input_dimensions):
         lines = [
-            "if x1.dim() == 1:",
-            "    mesh = torch.meshgrid(x1.flatten(), x2.flatten(), indexing='xy')",
-            "    x, y = mesh[0].T.unsqueeze(0), mesh[1].T.unsqueeze(0)",
-            "elif x1.dim() == 2 and x1.shape[1] == self.number_of_input_dimensions:",
-            "    x = torch.zeros((self.number_of_input_dimensions, x1.shape[0], x2.shape[0]), device=x1.device)",
-            "    y = torch.zeros((self.number_of_input_dimensions, x1.shape[0], x2.shape[0]), device=x1.device)",
-            "    for i in range(self.number_of_input_dimensions):",
-            "        mesh = torch.meshgrid(torch.squeeze(x1[:,i]), torch.squeeze(x2[:,i]), indexing='xy')",
-            "        x[i] = mesh[0].T",
-            "        y[i] = mesh[1].T",
+            "x1_data = x1[:,:-1] #the last column of the input tensors is expected to contain the task indices, the rest are data dimensions",
+            "i1 = x1[:,-1] ",
+            "x2_data = x2[:,:-1]",
+            "i2 = x2[:,-1]",
+
+            "# ensure correct shapes",
+            "if x1_data.dim() == 1:",
+            "    x1_data = x1_data.unsqueeze(-1)",
+            "if x2_data.dim() == 1:",
+            "    x2_data = x2_data.unsqueeze(-1)",
+
+            "# for broadcasting ",
+            "x1_ = x1_data.unsqueeze(-2)   # (N, 1, D) -> broadcasts to (N, M, D)",
+            "x2_ = x2_data.unsqueeze(-3)   # (1, M, D)",
+            "i1_ = i1.unsqueeze(-1)        # (N, 1)",
+            "i2_ = i2.unsqueeze(-2)        # (1, M)",
         ]    
         for p in kernel_object.parameters:
             lines.append(f"{p} = self.get_param('{p}')")
 
         substitutions = {"x": sp.IndexedBase("x"), "y": sp.IndexedBase("y")}
+
+        #get number of input dimensions 
         if base_kernel_arguments: 
             mapping = {}
             number_of_input_dimensions = 1
@@ -194,30 +225,39 @@ class PCGP_Builder:
             mapping = {sp.Symbol(f"x{k+1}"): substitutions["x"][k] for k in range(number_of_input_dimensions)}
             mapping.update({sp.Symbol(f"y{k+1}"): substitutions["y"][k] for k in range(number_of_input_dimensions)})
 
+        #make torch expressions for each kernel element
         for (i, j), element in np.ndenumerate(symbolic_kernel):
             expr = element.xreplace(mapping).simplify()
             torch_expr = pycode(expr).replace("math.", "torch.")
+            for k in range(number_of_input_dimensions):
+                torch_expr = torch_expr.replace(f"x[{k}]", f"x[...,{k}]")
+                torch_expr = torch_expr.replace(f"y[{k}]", f"y[...,{k}]")
             if expr == 0:
-                torch_expr = "torch.zeros_like(x[0], device=x.device)"
-            lines.append(f"k{i}{j} = {torch_expr}")
+                torch_expr = "torch.zeros_like(x[...,0], device=x.device)"
+            lines.append(f"def k{i}{j}_fn(x, y):")
+            lines.append(f"    return {torch_expr}")
 
-        # Assemble the cov matrix
-        cat_rows = []
+        
+        dict_rows = ["k_fns = {"]
         for i in range(num_tasks):
-            row_expr = ", ".join([f"k{i}{j}" for j in range(num_tasks)])
-            cat_rows.append(f"torch.cat([{row_expr}], dim=-1)")
-        full_mat = "torch.cat([\n    " + ",\n    ".join(cat_rows) + "], dim=-2)" 
+            for j in range(num_tasks):
+                dict_rows.append(f"    ({i}, {j}): k{i}{j}_fn,")
+        dict_rows.append("}")
+        lines.extend(dict_rows)
 
-        lines.append("cov_m = torch.squeeze(" + full_mat + ")")
-        lines.append(f"cov_f = rearrange(cov_m, \"(t1 w1) (t2 w2)-> (w1 t1) (w2 t2)\", t1={num_tasks}, t2={num_tasks})")
-        lines.append("return torch.diag(cov_f) if diag else cov_f")        
 
-        return KernelSpecifics(
-            body="\n".join([" " * 8 + l for l in lines]),
-            parameters=kernel_object.parameters,
-            input_dims=number_of_input_dimensions,
-            num_tasks=num_tasks,
-        )
+        assembling_kernel = [
+        "# assemble kernel",
+        "K = 0",
+        "for (t1, t2), fn in k_fns.items():",
+        "    mask = (i1_ == t1) & (i2_ == t2)   # call the right kernel function for each task pair",
+        "    K = K + fn(x1_, x2_) * mask",
+        "if diag:",
+        "    return torch.diag(K)",
+        "return K"]
+        lines.extend(assembling_kernel)
+        return "\n".join([" " * 8 + l for l in lines])
+    
     
     def write(self, class_name, output_dir=None):
         rendered = KERNEL_TEMPLATE.render(
@@ -238,4 +278,5 @@ class PCGP_Builder:
         with open(file_path, "w") as f:
             f.write(rendered)
         print(f"Kernel and model written to: {file_path}")
+
 

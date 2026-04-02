@@ -25,53 +25,54 @@ def train(model, likelihood, parameters, train_x, train_y, num_tasks, test_x=Non
         parameters_during_training = {}
         for key in parameters:
              parameters_during_training[key] = []
-        #parameters_during_training["noise"] = torch.zeros((num_tasks, training_iter), device = device )   
         loss_landscape = []
         optimizer = torch.optim.Adam(params, lr=0.1)
         marginal_log_likelihood  = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
         for i in range(training_iter):
                 optimizer.zero_grad()
                 output = model(train_x)
-                loss = -marginal_log_likelihood(output, train_y)*train_y.flatten().shape[0] #############################
-                
+                loss = -marginal_log_likelihood(output, train_y)
+               
                 for key in parameters:
-                    parameters_during_training[key].append(copy.deepcopy(model.covar_module.get_param(key).detach()))
-                #for t in range(num_tasks):
-                #    parameters_during_training["noise"][t, i] = likelihood.task_noises[t]    
+                    try:
+                        parameters_during_training[key].append(copy.deepcopy(model.covar_module.get_param(key).detach()))
+                    except:
+                        for kernel in model.covar_module.kernels:
+                            if key in kernel.parameters:
+                                parameters_during_training[key].append(copy.deepcopy(kernel.get_param(key).detach()))
+               
                 loss_landscape.append(loss.detach())
-                #if noise_constraints and likelihood.task_noises.requires_grad:
-                #    noise_constraints.enforce_constraints(likelihood.raw_task_noises)
+              
                 if i%100==0 and not device=="cuda":
                     print("iteration: ", i, "loss:", loss.item())
                 loss.backward(retain_graph = True)
                 optimizer.step()
-        
+
         model.train()
         likelihood.train()        
         optimizer.zero_grad()
         output = model(train_x)  
-        #print("output", output, train_x.shape)           
-        final_loss = -marginal_log_likelihood(output, train_y)*train_y.flatten().shape[0]###########################################
+        final_loss = -marginal_log_likelihood(output, train_y)
+
         test_loss = None
         if test_x is not None and test_y is not None:
             model.eval()
             likelihood.eval()
             test_output = model(test_x)
-            test_loss = -marginal_log_likelihood(test_output, test_y).detach()#############################
+            test_loss = -marginal_log_likelihood(test_output, test_y).detach()
+
         inverse_hessian, hessian, order_of_parameters_with_gradients = None, None, None
         if laplace:
             inverse_hessian, hessian, order_of_parameters_with_gradients = calculate_laplace_approx_matrix(parameters, model, final_loss)
         loss_landscape = torch.stack(loss_landscape).detach().cpu().numpy() 
         for key in parameters_during_training:
-            if key != "noise":
-                parameters_during_training[key] =  torch.stack(parameters_during_training[key]).detach().cpu().numpy()
+            parameters_during_training[key] =  torch.stack(parameters_during_training[key]).detach().cpu().numpy()
     return train_output(parameters_during_training=parameters_during_training,
                         covariance_matrix=inverse_hessian,
                         hessian=hessian,
                         order_of_parameters_in_covariance=order_of_parameters_with_gradients,
                         loss_landscape=loss_landscape,
                         test_loss=test_loss)
-    #return parameters_during_training, inverse_hessian, hessian, order_of_parameters_with_gradients, loss_landscape, test_loss     
 
 
 def predict(model, likelihood=None, test_x = torch.linspace(0, 1, 51)):
