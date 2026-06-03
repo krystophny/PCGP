@@ -10,7 +10,7 @@ If you want to cite the code please cite the MaxEnt Proceedings 2025 (doi upon p
 
 We will clone the github via ssh (make sure you have a key from your local machine to your git accout) and install PCGP and all dependencies via pip and conda: 
 
-git clone https://git@github.com:moserjo/PCGP.git  
+git clone git@github.com:moserjo/PCGP.git  
 conda install -c conda-forge pytorch gpytorch jax numpyro sympy scipy einops jinja2 numpy  
 cd PCGP  
 pip install -e 

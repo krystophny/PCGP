@@ -5,6 +5,7 @@ PCGP/__init__.py
 PCGP/constraint_handling.py
 PCGP/generator_gpytorch.py
 PCGP/generator_numpyro.py
+PCGP/generator_jax.py
 PCGP/gpytorch_tools.py
 PCGP/symbolic_kernels.py
 PCGP.egg-info/PKG-INFO

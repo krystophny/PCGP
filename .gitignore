@@ -18,6 +18,9 @@ MaxEnt2025_paper/graphs_presentation
 # Files under development
 development/
 
+# debugging tests 
+Tests/
+
 #just for presentation
 MaxEnt2025_paper/graphs_for_presentation.ipynb
 Tutorials/Tutorial_video

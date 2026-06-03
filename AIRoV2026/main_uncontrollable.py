@@ -1,7 +1,7 @@
 import torch
 import gpytorch
 import Bipendulum as ex
-import PCGP.gpytorch_tools as gt
+import PCGP.gpytorch.gpytorch_tools as gt
 import numpy as np
 import math
 import matplotlib.pyplot as plt
@@ -68,15 +68,9 @@ test_x = torch.linspace(0, 6, 100)
 
 test_i = torch.cat([torch.zeros_like(test_x), torch.ones_like(test_x), torch.ones_like(test_x)*2], dim=0)
 full_test_x = torch.stack([test_x.repeat(3), test_i], dim=-1)
-<<<<<<< HEAD
-mean_0, lower_0, upper_0 = gt.predict(model, likelihood, test_x=torch.stack([test_x, torch.zeros_like(test_x)], dim=-1))
-mean_1, lower_1, upper_1 = gt.predict(model, likelihood, test_x=torch.stack([test_x, torch.ones_like(test_x)], dim=-1))
-mean_2, lower_2, upper_2 = gt.predict(model, likelihood, test_x=torch.stack([test_x, torch.ones_like(test_x)*2], dim=-1))
-=======
 mean_0, lower_0, upper_0 = gt.predict(model, test_x=torch.stack([test_x, torch.zeros_like(test_x)], dim=-1))
 mean_1, lower_1, upper_1 = gt.predict(model, test_x=torch.stack([test_x, torch.ones_like(test_x)], dim=-1))
 mean_2, lower_2, upper_2 = gt.predict(model, test_x=torch.stack([test_x, torch.ones_like(test_x)*2], dim=-1))
->>>>>>> 14037e1 (Preparation v1.1.1, backend fixes and refactoring. Frontend usage stays the same, gpytorch_tools.train is deprecated.)
 
 
 
@@ -100,13 +94,11 @@ def analytic_solution(train_x, BC, t1 = 6, wu = 2, g = 1, l = 1, noise = 0):
 
 
 true_solution = analytic_solution(full_test_x.numpy(), BC, noise = 0)
-<<<<<<< HEAD
-=======
 import os
 
 with torch.no_grad():
     np.savez_compressed(
-            os.path.join(os.path.dirname(__file__), "data.npz"),
+            os.path.join(os.path.dirname(__file__), "data_uncontrollable.npz"),
             test_x = full_test_x.numpy(),
             test_y = true_solution,
             train_x = full_train_x.numpy(),
@@ -119,7 +111,6 @@ print("saved")
 
 
 
->>>>>>> 14037e1 (Preparation v1.1.1, backend fixes and refactoring. Frontend usage stays the same, gpytorch_tools.train is deprecated.)
 
 plt.rcParams.update({'font.size': 18})
 fig, ax = plt.subplots(num_tasks,1, sharex=True, figsize=(8,7))
@@ -140,14 +131,8 @@ ax[0].set_ylabel(r"""$\theta_1$""")
 ax[1].set_ylabel(r"""$\theta_2$""")
 ax[2].set_ylabel(r"""$u$""")
 ax[2].set_xlabel(r"""$t$""")
-<<<<<<< HEAD
-ax[2].legend(["Mean", "Confidence Interval", "True Solution", "Observed Data"], loc="upper right",)# fontsize = 14)
-plt.tight_layout(h_pad = 0.1)
-#plt.savefig("Bipendulum.png", dpi=300)
-=======
 ax[0].legend(["Mean", "Confidence", "True", "Observations"], ncol = 4, loc=(-.07, 1.05),  fontsize = 14)
 
 plt.tight_layout(h_pad = 0.1)
-plt.savefig("Bipendulum.svg")
->>>>>>> 14037e1 (Preparation v1.1.1, backend fixes and refactoring. Frontend usage stays the same, gpytorch_tools.train is deprecated.)
+plt.savefig("Bipendulum_uncontrollable.svg")
 plt.show()

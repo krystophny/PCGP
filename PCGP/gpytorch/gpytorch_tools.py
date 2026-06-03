@@ -1,12 +1,14 @@
+"""will be deprecated in next update, do not use"""
 
 import torch
 import gpytorch
 from .constraint_handling import ConstraintsModifications
+from .LaplaceApprox import laplace_approx
 from dataclasses import dataclass
 import copy
 torch.set_default_dtype(torch.float64)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-@dataclass#parameters_during_training, inverse_hessian, hessian, order_of_parameters_with_gradients, loss_landscape, test_loss
+@dataclass
 class train_output:
     parameters_during_training:dict
     covariance_matrix: torch.tensor
@@ -34,12 +36,21 @@ def train(model, likelihood, parameters, train_x, train_y, num_tasks, test_x=Non
                 loss = -marginal_log_likelihood(output, train_y)
                
                 for key in parameters:
+<<<<<<< HEAD:PCGP/gpytorch_tools.py
                     try:
                         parameters_during_training[key].append(copy.deepcopy(model.covar_module.get_param(key).detach()))
                     except:
                         for kernel in model.covar_module.kernels:
                             if key in kernel.parameters:
                                 parameters_during_training[key].append(copy.deepcopy(kernel.get_param(key).detach()))
+=======
+                    #try:
+                        parameters_during_training[key].append(copy.deepcopy(model.covar_module.get_param(key).detach()))
+                    #except:
+                    #    for kernel in model.covar_module.kernels:
+                    #        if key in kernel.parameters:
+                    #            parameters_during_training[key].append(copy.deepcopy(kernel.get_param(key).detach()))
+>>>>>>> 14037e1 (Preparation v1.1.1, backend fixes and refactoring. Frontend usage stays the same, gpytorch_tools.train is deprecated.):PCGP/gpytorch/gpytorch_tools.py
                
                 loss_landscape.append(loss.detach())
               
@@ -63,7 +74,9 @@ def train(model, likelihood, parameters, train_x, train_y, num_tasks, test_x=Non
 
         inverse_hessian, hessian, order_of_parameters_with_gradients = None, None, None
         if laplace:
+            #laplace_return = laplace_approx(parameters, model, final_loss)
             inverse_hessian, hessian, order_of_parameters_with_gradients = calculate_laplace_approx_matrix(parameters, model, final_loss)
+            #laplace_return.covariance, laplace_return.hessian, laplace_return.parameter_index
         loss_landscape = torch.stack(loss_landscape).detach().cpu().numpy() 
         for key in parameters_during_training:
             parameters_during_training[key] =  torch.stack(parameters_during_training[key]).detach().cpu().numpy()
@@ -86,15 +99,7 @@ def predict(model, likelihood=None, test_x = torch.linspace(0, 1, 51)):
     return mean, lower, upper
 
 
-def fix_task_noises(task_noises, model):
-    if torch.is_tensor(task_noises):
-        fixed_task_noises = task_noises
-    else:
-        fixed_task_noises = torch.tensor(task_noises, device=device)  
-    fixed_raw_task_noises = model.likelihood.raw_task_noises_constraint.inverse_transform(fixed_task_noises)
-    model.likelihood.raw_task_noises.requires_grad = False
-    with torch.no_grad():
-        model.likelihood.raw_task_noises.copy_(fixed_raw_task_noises)
+
         
 def calculate_laplace_approx_matrix(parameters, model, loss):
     parameters_with_gradient = []
