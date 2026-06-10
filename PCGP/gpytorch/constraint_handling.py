@@ -1,3 +1,4 @@
+import ast
 import torch
 
 
@@ -21,14 +22,15 @@ class ConstraintsModifications():
         if self.constraints[index] == False:
             return None, 0.0
         string = self.constraints[index].__repr__()
-        for i in range(len(string)):
-                if string[i] == "(":
-                    il = i
-                elif string[i] == ")":
-                    ih = i
+        il = string.find("(")
+        ih = string.rfind(")")
+        if il == -1 or ih == -1:
+            raise ValueError(f"Unexpected constraint repr format (no parentheses): {string!r}")
         condition = string[:il]
-        if il+1!=ih: value = eval(string[il+1:ih]) 
-        else: value = 0.
+        if il + 1 != ih:
+            value = ast.literal_eval(string[il+1:ih])
+        else:
+            value = 0.
         return condition, value
     
     def is_fulfilled(self, value, index = 0): 
@@ -74,7 +76,11 @@ class ConstraintsModifications():
         :return: tuple (torch.tensor, torch.tensor), first and second derivative of inverse transform"""
 
         condition, value = self.read_constraint(index = index)
+        if condition is None:
+            return torch.tensor([1]), torch.tensor([0])
         if condition == "Interval":
+            if not isinstance(value, (tuple, list)) or len(value) != 2:
+                raise ValueError(f"Interval constraint expected a 2-tuple of bounds, got: {value!r}")
             lower, upper = value
             fx = (transformed_parameter - lower)/(upper - lower)
             derivative = (1/fx + 1/(1-fx))/(upper - lower)
@@ -87,11 +93,10 @@ class ConstraintsModifications():
              fx = transformed_parameter - value
              derivative = 1/(-torch.expm1(-fx))
              second_derivative = -1/(torch.expm1(-fx)+torch.expm1(fx))
-        else: 
-            derivative = torch.tensor([1])
-            second_derivative = torch.tensor([0]) 
+        else:
+            raise ValueError(f"Unknown constraint condition: {condition!r}")
 
-        return derivative, second_derivative    
+        return derivative, second_derivative
 
      
        

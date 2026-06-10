@@ -3,7 +3,7 @@ import os
 import torch
 import gpytorch
 import Experiment2_PIGP as ex
-import PCGP.gpytorch_tools as gt
+import PCGP.gpytorch.gpytorch_tools as gt
 import numpy as np
 torch.set_default_dtype(torch.float64)
 import jax.numpy as jnp

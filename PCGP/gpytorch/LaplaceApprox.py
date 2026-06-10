@@ -13,7 +13,7 @@ class LaplaceResult:
 
 def laplace_approx(parameters, model, loss):
     """
-    Calculates the hessian of the -marginal log likelihood loss.
+    Calculates the hessian of the -marginal log likelihood loss and its inverse.
     Returns a LaplaceResult dataclass containing the hessian, the covariance matrix used in the Laplace Approximation, that is the square root of the inverse of the hessian, the MAP estimates aka the mean in the Laplace Approximation, and a dictionary parameter_index containing the used parameter names as keys and the corresponding indices as values to guarantee the right order when accessing hessian, covariance, and MAP_estimates.
     
     :param parameters: dict
@@ -34,7 +34,7 @@ def laplace_approx(parameters, model, loss):
     inv_transformation_second_derivative = torch.zeros(len(parameters_with_gradient), device=device)
     parameter_index = {}
 
-    MAP_estimates = [model.covar_module.get_param(k).detach() for k in parameters_with_gradient]
+    MAP_estimates = torch.squeeze(torch.tensor([model.covar_module.get_param(k).detach() for k in parameters_with_gradient]))
 
     raw_params = [model.covar_module.get_raw_param(k) for k in parameters_with_gradient]
     parameter_index = {name: i for i, name in enumerate(parameters_with_gradient)}
@@ -64,8 +64,7 @@ def laplace_approx(parameters, model, loss):
                 else: 
                      hessian[i,j] = raw_hessian[i,j]*inv_transformation_first_derivative[i]*inv_transformation_first_derivative[j]
     covariance_matrix = torch.linalg.inv(hessian)
-
-    covariance_matrix_out = torch.sqrt(covariance_matrix.cpu().detach())
+    covariance_matrix_out = covariance_matrix.cpu().detach()
     hessian_out = hessian.cpu().detach()   
     return LaplaceResult(covariance = covariance_matrix_out, hessian = hessian_out, parameter_index = parameter_index, MAP_estimates = MAP_estimates)#covariance_matrix, hessian.cpu().detach(), parameters_with_gradient #need to return parameters with gradient so that we know which matrixelement corresponds to which parameter
 

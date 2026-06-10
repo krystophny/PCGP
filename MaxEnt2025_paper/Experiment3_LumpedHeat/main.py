@@ -8,7 +8,7 @@ import jax
 import numpyro.distributions as dist
 import Experiment3_LumpedHeat as ex
 import Experiment3_LumpedHeat_numpyro as nmcmc
-import PCGP.gpytorch_tools as gt
+import PCGP.gpytorch.gpytorch_tools as gt
 torch.set_default_dtype(torch.float64)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device_jax = jax.devices()[0]

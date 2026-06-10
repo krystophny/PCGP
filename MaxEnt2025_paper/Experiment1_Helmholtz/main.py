@@ -2,7 +2,7 @@ import os
 import numpy as np
 import torch
 import gpytorch
-import PCGP.gpytorch_tools as gt
+import PCGP.gpytorch.gpytorch_tools as gt
 import Experiment1_Helmholtz as ex
 torch.set_default_dtype(torch.float64)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

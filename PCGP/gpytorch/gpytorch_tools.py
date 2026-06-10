@@ -36,21 +36,12 @@ def train(model, likelihood, parameters, train_x, train_y, num_tasks, test_x=Non
                 loss = -marginal_log_likelihood(output, train_y)
                
                 for key in parameters:
-<<<<<<< HEAD:PCGP/gpytorch_tools.py
-                    try:
-                        parameters_during_training[key].append(copy.deepcopy(model.covar_module.get_param(key).detach()))
-                    except:
-                        for kernel in model.covar_module.kernels:
-                            if key in kernel.parameters:
-                                parameters_during_training[key].append(copy.deepcopy(kernel.get_param(key).detach()))
-=======
                     #try:
                         parameters_during_training[key].append(copy.deepcopy(model.covar_module.get_param(key).detach()))
                     #except:
                     #    for kernel in model.covar_module.kernels:
                     #        if key in kernel.parameters:
                     #            parameters_during_training[key].append(copy.deepcopy(kernel.get_param(key).detach()))
->>>>>>> 14037e1 (Preparation v1.1.1, backend fixes and refactoring. Frontend usage stays the same, gpytorch_tools.train is deprecated.):PCGP/gpytorch/gpytorch_tools.py
                
                 loss_landscape.append(loss.detach())
               

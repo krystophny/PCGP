@@ -51,10 +51,9 @@ def build_structure(x1, x2, num_tasks):
         jnp.where(idx2 == i)[0]
         for i in range(num_tasks)
     )
-    print(x1_struct)
     return KernelStructure(x1_struct, x2_struct)
 
-def gp_posterior_sample(key, kernel, train_x, train_y, test_x, params, sigma):
+def gp_posterior_sample(key, kernel, train_x, train_y, test_x, params, sigma, jitter = 1e-6):
     """
     Returns a sample from the posterior distribution of a Gaussian process with a given kernel, parameters, and noise level, evaluated at test points test_x. The sample is drawn using the Cholesky decomposition of the posterior covariance matrix.
 
@@ -92,7 +91,7 @@ def gp_posterior_sample(key, kernel, train_x, train_y, test_x, params, sigma):
     cov = K_starstar - v.T @ v
     
     # Sample
-    L_post = jnp.linalg.cholesky(cov + 1e-6 * jnp.eye(cov.shape[0])) #to be seen how to handle jitter (hard coded?)
+    L_post = jnp.linalg.cholesky(cov + jitter * jnp.eye(cov.shape[0])) #to be seen how to handle jitter (hard coded?)
     eps = jax.random.normal(key, (cov.shape[0],))
     return mu + L_post @ eps
                            
@@ -125,13 +124,20 @@ def single_mll(params, train_x, train_y, sigma, kernel, prior = None):
     K = kernel(train_x, train_x, params)
     N = K.shape[0]
     K += sigma**2 * jnp.eye(N)
-    L = jnp.linalg.cholesky(K)
+    """L = jnp.linalg.cholesky(K)
     L_inv_Y = solve_triangular(L, train_y, lower=True) 
     fit_term = -0.5 * jnp.sum(L_inv_Y**2) 
-    complexity_term = -jnp.sum(jnp.log(jnp.diagonal(L)))
+    complexity_term = -jnp.sum(jnp.log(jnp.diagonal(L)))"""
+
+    eigenvalues, eigenvectors = jnp.linalg.eigh(K)
+    eigenvalues = jnp.maximum(eigenvalues, 1e-10)
+    Qy = eigenvectors.T @ train_y
+    fit_term = -0.5 * jnp.sum(Qy**2 / eigenvalues)
+    complexity_term = -0.5 * jnp.sum(jnp.log(eigenvalues))
     mll = fit_term + complexity_term -0.5*N*jnp.log(2*jnp.pi)
+
     if prior:
-        print("Prior added, result not normalized.")
+        #print("Prior added, result not normalized.")
         for key in prior:
             mll += jnp.log(prior[key])
     return mll
