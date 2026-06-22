@@ -5,7 +5,7 @@ from .gpytorch.constraint_handling import ConstraintsModifications
 from .gpytorch.LaplaceApprox import laplace_approx, LaplaceResult
 from .jax.grid import build_structure, gp_posterior_sample, single_mll, mll
 from .jax.numpyro import build_model, run_inference
-f
+
 
 
 __all__ = [

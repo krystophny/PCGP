@@ -9,7 +9,7 @@ class PCGP_Kernel_0(gpytorch.kernels.Kernel):
     def __init__(self, parameter_modifications = {}, number_of_input_dimensions=1, num_tasks=2, **kwargs):
         super().__init__()
         self.num_tasks = num_tasks
-        self.parameter_dict = {'amplitude': None, 'lengthscale': None, 'a': None}
+        self.parameter_dict = {'amplitude': None, 'a': None, 'lengthscale': None}
         self.param_constraints = {}
         self.number_of_input_dimensions = number_of_input_dimensions
                            
@@ -86,8 +86,8 @@ class PCGP_Kernel_0(gpytorch.kernels.Kernel):
         splits1 = torch.split(sorted_data1, counts1)
         splits2 = torch.split(sorted_data2, counts2)
         amplitude = self.get_param('amplitude')
-        lengthscale = self.get_param('lengthscale')
         a = self.get_param('a')
+        lengthscale = self.get_param('lengthscale')
         def k00_fn(x, y):
             return amplitude*torch.exp(-1/2*(x[...,0] - y[...,0])**2/lengthscale)
         def k01_fn(x, y):

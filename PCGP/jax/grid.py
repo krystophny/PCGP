@@ -109,7 +109,7 @@ def single_mll(params, train_x, train_y, sigma, kernel, prior = None):
         The trainings evalutation points, where each row corresponds to a data point and each column corresponds to a dimension; the last column specifies the corresponding task.
     train_y : jax.numpy array
         The training targets, where each row corresponds to a data point in the same order as X.
-    sigma : float
+    sigma : float or jnp.array of length train_y
         Standard deviation of the Gaussian noise in the likelihood.
     kernel : function
         Gaussian process kernel
@@ -124,16 +124,18 @@ def single_mll(params, train_x, train_y, sigma, kernel, prior = None):
     K = kernel(train_x, train_x, params)
     N = K.shape[0]
     K += sigma**2 * jnp.eye(N)
-    """L = jnp.linalg.cholesky(K)
+    L = jnp.linalg.cholesky(K)
+    """    eigenvalues, eigenvectors = jnp.linalg.eigh(K)
+        eigenvalues = jnp.maximum(eigenvalues, 1e-10)
+        Qy = eigenvectors.T @ train_y
+        fit_term = -0.5 * jnp.sum(Qy**2 / eigenvalues)
+        complexity_term = -0.5 * jnp.sum(jnp.log(eigenvalues))"""
+  
     L_inv_Y = solve_triangular(L, train_y, lower=True) 
     fit_term = -0.5 * jnp.sum(L_inv_Y**2) 
-    complexity_term = -jnp.sum(jnp.log(jnp.diagonal(L)))"""
+    complexity_term = -jnp.sum(jnp.log(jnp.diagonal(L)))
 
-    eigenvalues, eigenvectors = jnp.linalg.eigh(K)
-    eigenvalues = jnp.maximum(eigenvalues, 1e-10)
-    Qy = eigenvectors.T @ train_y
-    fit_term = -0.5 * jnp.sum(Qy**2 / eigenvalues)
-    complexity_term = -0.5 * jnp.sum(jnp.log(eigenvalues))
+    
     mll = fit_term + complexity_term -0.5*N*jnp.log(2*jnp.pi)
 
     if prior:

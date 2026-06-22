@@ -137,7 +137,7 @@ class PCGP_Model(gpytorch.models.ExactGP):
                 )
 
     def forward(self, x):
-        mean_x = self.mean_module(x[:,0]) ##no need for task specific mean since it's zero
+        mean_x = self.mean_module(x[...,0]) ##no need for task specific mean since it's zero
         covar_x = self.covar_module(x)
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x) 
 """)
