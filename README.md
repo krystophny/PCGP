@@ -2,7 +2,7 @@
 ! This repository is under active development. APIs may change without notice.
 Here we will publish the code package for physics consistent Gaussian Processes as well as example scripts and tutorials.
 
-If you want to cite the code please cite the MaxEnt Proceedings 2025 (doi upon publication) paper "Parameter learning with physics-consistent Gaussian Processes" by J.Moser, C. Albert and S. Ranftl
+If you want to cite the code please cite the MaxEnt Proceedings 2025  paper "Parameter learning with physics-consistent Gaussian Processes" by J.Moser, C. Albert and S. Ranftl  https://doi.org/10.5281/zenodo.20392038
 
 
 
