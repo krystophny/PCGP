@@ -1,7 +1,7 @@
 Metadata-Version: 2.4
 Name: PCGP
-Version: 1.1.0
-Summary: This is the updated version of the package PCGP (physics-consistent Gaussian Processes), that uses parametrization to find solutions for differential equations and related issues.
+Version: 1.1.1
+Summary: This is PCGP (physics-consistent Gaussian Processes), that uses parametrization and autonomous solutions to find solutions for differential equations and related issues.
 Author-email: Johanna Moser <j.moser@tugraz.com>
 License-File: LICENSE
 Requires-Dist: einops>=0.8.1

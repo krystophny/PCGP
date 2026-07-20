@@ -58,14 +58,14 @@ class ConstraintsModifications():
         """generates a "standard" initial value that fulfills the constraint at given index (standard index = 0)"""
         condition, values = self.read_constraint(index = index)
         if condition == "GreaterThan":
-            init_val = values + 1
+            init_val = values + torch.rand(1)
         elif condition == "LessThan":
-            init_val = values - 1
+            init_val = values - torch.rand(1)
         elif condition == "Positive":
-            init_val = values + 1
+            init_val = values + torch.rand(1)
         elif condition == "Interval":
             lower, upper = values
-            init_val = lower + (upper-lower)/2. 
+            init_val = lower + (upper-lower)/(1+torch.rand(1)*2)
         else: init_val = 0.0
         return init_val  
     
