@@ -24,6 +24,12 @@ class PCGP_Kernel_{{ loop.index0 }}(gpytorch.kernels.Kernel):
         self.parameter_dict = {{parameters_of_kernel}}
         self.param_constraints = {}
         self.number_of_input_dimensions = number_of_input_dimensions
+        unknown_parameters = sorted(set(parameter_modifications) - set(self.parameter_dict))
+        if unknown_parameters:
+            raise ValueError(
+                f"Unknown parameter names: {unknown_parameters}. "
+                f"Valid names: {sorted(self.parameter_dict)}"
+            )
                            
         for param_name in self.parameter_dict:
             raw_name = f"raw_{param_name}"
@@ -68,9 +74,10 @@ class PCGP_Kernel_{{ loop.index0 }}(gpytorch.kernels.Kernel):
         if param_name in self.parameter_dict:
             self._set_param(param_name, value)
         else:
-            raw_name = f"raw_{param_name}"
-            value_tensor = torch.nn.Parameter(torch.tensor([value]))
-            self.register_parameter(raw_name, value_tensor)
+            raise ValueError(
+                f"Unknown parameter name: {param_name}. "
+                f"Valid names: {sorted(self.parameter_dict)}"
+            )
 
 
     def forward(self, x1, x2, diag=False, **params):
@@ -128,6 +135,20 @@ class PCGP_Model(gpytorch.models.ExactGP):
                             {% if not loop.last %} + {% endif %}{% endfor %})
                         
         if priors:
+            if hasattr(self.covar_module, "parameter_dict"):
+                valid_parameter_names = set(self.covar_module.parameter_dict)
+            else:
+                valid_parameter_names = {
+                    name
+                    for kernel in self.covar_module.kernels
+                    for name in kernel.parameter_dict
+                }
+            unknown_priors = sorted(set(priors) - valid_parameter_names)
+            if unknown_priors:
+                raise ValueError(
+                    f"Unknown prior parameter names: {unknown_priors}. "
+                    f"Valid names: {sorted(valid_parameter_names)}"
+                )
             for name, prior in priors.items():
                 self.register_prior(
                     name+"_prior",
@@ -321,5 +342,4 @@ class PCGP_Builder:
         with open(file_path, "w") as f:
             f.write(rendered)
         print(f"Kernel and model written to: {file_path}")
-
 
