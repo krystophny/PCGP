@@ -17,7 +17,8 @@ dependencies = [
     "sympy>=1.14.0",
     "torch>=2.7.0"
 ]
-[tool.setuptools]
-packages = ["PCGP"]
+[tool.setuptools.packages.find]
+include = ["PCGP*"]
+namespaces = true
 [project.optional-dependencies]
 experiments = ["matplotlib>=3.7", "jupyter>=1.0"]
