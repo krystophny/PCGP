@@ -6,8 +6,6 @@ from .constraint_handling import ConstraintsModifications
 from .LaplaceApprox import laplace_approx
 from dataclasses import dataclass
 import copy
-torch.set_default_dtype(torch.float64)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 @dataclass
 class train_output:
     parameters_during_training:dict
@@ -45,7 +43,7 @@ def train(model, likelihood, parameters, train_x, train_y, num_tasks, test_x=Non
                
                 loss_landscape.append(loss.detach())
               
-                if i%100==0 and not device=="cuda":
+                if i%100==0 and loss.device.type != "cuda":
                     print("iteration: ", i, "loss:", loss.item())
                 loss.backward(retain_graph = True)
                 optimizer.step()
@@ -93,14 +91,16 @@ def predict(model, likelihood=None, test_x = torch.linspace(0, 1, 51)):
 
         
 def calculate_laplace_approx_matrix(parameters, model, loss):
+    device = loss.device
+    dtype = loss.dtype
     parameters_with_gradient = []
     for key in parameters:
         if model.covar_module.get_param(key).requires_grad:
             parameters_with_gradient.append(key)
-    raw_hessian = torch.zeros((len(parameters_with_gradient), len(parameters_with_gradient)), device=device)
+    raw_hessian = torch.zeros((len(parameters_with_gradient), len(parameters_with_gradient)), device=device, dtype=dtype)
     raw_first_derivative = []
-    inv_transformation_first_derivative = torch.ones(len(parameters_with_gradient), device=device)
-    inv_transformation_second_derivative = torch.zeros(len(parameters_with_gradient), device=device)
+    inv_transformation_first_derivative = torch.ones(len(parameters_with_gradient), device=device, dtype=dtype)
+    inv_transformation_second_derivative = torch.zeros(len(parameters_with_gradient), device=device, dtype=dtype)
     for i in range(len(parameters_with_gradient)):
         key = parameters_with_gradient[i]
         raw_first_derivative.append(torch.autograd.grad(loss, model.covar_module.get_raw_param(key), retain_graph = True, create_graph=True)[0])
@@ -116,7 +116,7 @@ def calculate_laplace_approx_matrix(parameters, model, loss):
                                                        , model.covar_module.get_raw_param(key_j), retain_graph = True)[0]
             raw_hessian[i,j] = mixed_derivative
             raw_hessian[j,i] = mixed_derivative
-    hessian = torch.zeros((len(parameters_with_gradient), len(parameters_with_gradient)), device=device)  
+    hessian = torch.zeros((len(parameters_with_gradient), len(parameters_with_gradient)), device=device, dtype=dtype)
     for i in range(len(parameters_with_gradient)):
             for j in range(len(parameters_with_gradient)):
                 if i == j: 
@@ -125,4 +125,3 @@ def calculate_laplace_approx_matrix(parameters, model, loss):
                      hessian[i,j] = raw_hessian[i,j]*inv_transformation_first_derivative[i]*inv_transformation_first_derivative[j]
     covariance_matrix = torch.inverse(hessian).cpu().detach()    
     return covariance_matrix, hessian.cpu().detach(), parameters_with_gradient #need to return parameters with gradient so that we know which matrixelement corresponds to which parameter
-
