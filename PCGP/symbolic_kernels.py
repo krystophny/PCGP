@@ -157,11 +157,20 @@ class symbolic_mercer_kernel:
         self.base_functions = base_functions
         self.Sigma = Sigma
         self.x = sp.symbols(f'x1:{number_of_input_dimensions + 1}')  # creates (x1, x2,..)
-        self.y = sp.symbols(f'y1:{number_of_input_dimensions + 1}')  
+        self.y = sp.symbols(f'y1:{number_of_input_dimensions + 1}')
+        basis = self.base_functions(self.x)
+        sigma_symbols = set()
+        if self.Sigma is not None:
+            expected_shape = (basis.shape[1], basis.shape[1])
+            if self.Sigma.shape != expected_shape:
+                raise ValueError(
+                    f"Sigma must have shape {expected_shape}, got {self.Sigma.shape}"
+                )
+            sigma_symbols = self.Sigma.free_symbols
         self.parameters = {
             str(sym): None
             for sym in (
-                self.base_functions(self.x).free_symbols
+                basis.free_symbols.union(sigma_symbols)
                 - set(self.x)
             )
         }
@@ -175,4 +184,3 @@ class symbolic_mercer_kernel:
         else:
             mercer_kernel = sp.simplify(self.base_functions(self.x)@self.Sigma@self.base_functions(self.y).transpose())
         return mercer_kernel
-
