@@ -29,7 +29,9 @@ class PCGP_Kernel_{{ loop.index0 }}(gpytorch.kernels.Kernel):
             raw_name = f"raw_{param_name}"
             param = torch.nn.Parameter(torch.ones(1), requires_grad=True)
             self.register_parameter(raw_name, param)   
-            if param_name[:-2] == "amplitude" or param_name[:-2] == "lengthscale":
+            if (param_name in {"amplitude", "lengthscale"}
+                    or param_name.startswith("amplitude_")
+                    or param_name.startswith("lengthscale_")):
                 self.register_constraint(raw_name, gpytorch.constraints.Positive())
                 self.param_constraints[param_name] = gpytorch.constraints.Positive() 
                            
@@ -321,5 +323,4 @@ class PCGP_Builder:
         with open(file_path, "w") as f:
             f.write(rendered)
         print(f"Kernel and model written to: {file_path}")
-
 
