@@ -9,7 +9,7 @@ class PCGP_Kernel_0(gpytorch.kernels.Kernel):
     def __init__(self, parameter_modifications = {}, number_of_input_dimensions=1, num_tasks=2, **kwargs):
         super().__init__()
         self.num_tasks = num_tasks
-        self.parameter_dict = {'a': None, 'amplitude': None, 'lengthscale': None}
+        self.parameter_dict = {'lengthscale_0': None, 'amplitude_0': None, 'R': None}
         self.param_constraints = {}
         self.number_of_input_dimensions = number_of_input_dimensions
                            
@@ -85,17 +85,17 @@ class PCGP_Kernel_0(gpytorch.kernels.Kernel):
         counts2 = torch.bincount(idx2).tolist()
         splits1 = torch.split(sorted_data1, counts1)
         splits2 = torch.split(sorted_data2, counts2)
-        a = self.get_param('a')
-        amplitude = self.get_param('amplitude')
-        lengthscale = self.get_param('lengthscale')
+        lengthscale_0 = self.get_param('lengthscale_0')
+        amplitude_0 = self.get_param('amplitude_0')
+        R = self.get_param('R')
         def k00_fn(x, y):
-            return amplitude*torch.exp(-1/2*(x[...,0] - y[...,0])**2/lengthscale)
+            return amplitude_0*torch.exp(-1/2*(x[...,0] - y[...,0])**2/lengthscale_0)
         def k01_fn(x, y):
-            return a*amplitude*(x[...,0] - y[...,0])*torch.exp(-1/2*(x[...,0] - y[...,0])**2/lengthscale)/lengthscale
+            return amplitude_0*(R*(x[...,0] - y[...,0]) + lengthscale_0)*torch.exp(-1/2*(x[...,0] - y[...,0])**2/lengthscale_0)/lengthscale_0
         def k10_fn(x, y):
-            return -a*amplitude*(x[...,0] - y[...,0])*torch.exp(-1/2*(x[...,0] - y[...,0])**2/lengthscale)/lengthscale
+            return -amplitude_0*(R*(x[...,0] - y[...,0]) - lengthscale_0)*torch.exp(-1/2*(x[...,0] - y[...,0])**2/lengthscale_0)/lengthscale_0
         def k11_fn(x, y):
-            return a**2*amplitude*(lengthscale - (x[...,0] - y[...,0])**2)*torch.exp(-1/2*(x[...,0] - y[...,0])**2/lengthscale)/lengthscale**2
+            return amplitude_0*(R**2*(lengthscale_0 - (x[...,0] - y[...,0])**2) + lengthscale_0**2)*torch.exp(-1/2*(x[...,0] - y[...,0])**2/lengthscale_0)/lengthscale_0**2
         function_grid = [
             [k00_fn, k01_fn],
             [k10_fn, k11_fn],

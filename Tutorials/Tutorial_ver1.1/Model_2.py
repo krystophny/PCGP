@@ -9,20 +9,20 @@ class PCGP_Kernel_0(gpytorch.kernels.Kernel):
     def __init__(self, parameter_modifications = {}, number_of_input_dimensions=1, num_tasks=2, **kwargs):
         super().__init__()
         self.num_tasks = num_tasks
-        self.parameters = {'lengthscale': None, 'R': None, 'amplitude': None}
+        self.parameter_dict = {'lengthscale': None, 'amplitude': None, 'R': None}
         self.param_constraints = {}
         self.number_of_input_dimensions = number_of_input_dimensions
                            
-        for param_name in self.parameters:
+        for param_name in self.parameter_dict:
             raw_name = f"raw_{param_name}"
             param = torch.nn.Parameter(torch.ones(1), requires_grad=True)
             self.register_parameter(raw_name, param)   
-            if param_name == "amplitude" or param_name == "lengthscale":
+            if param_name[:-2] == "amplitude" or param_name[:-2] == "lengthscale":
                 self.register_constraint(raw_name, gpytorch.constraints.Positive())
                 self.param_constraints[param_name] = gpytorch.constraints.Positive() 
                            
         for param_name, (value, requires_grad, constraint) in parameter_modifications.items():
-            if param_name in self.parameters:
+            if param_name in self.parameter_dict:
                 raw_name = f"raw_{param_name}"
                 raw_param = getattr(self, raw_name)
                 # handle constraints
@@ -53,47 +53,76 @@ class PCGP_Kernel_0(gpytorch.kernels.Kernel):
         return getattr(self, f"raw_{param_name}")
 
     def set_param(self, param_name, value):
-        if param_name in self.parameters:
+        if param_name in self.parameter_dict:
             self._set_param(param_name, value)
         else:
             raw_name = f"raw_{param_name}"
             value_tensor = torch.nn.Parameter(torch.tensor([value]))
             self.register_parameter(raw_name, value_tensor)
 
-    def num_outputs_per_input(self, x1, x2):
-        return self.num_tasks
 
     def forward(self, x1, x2, diag=False, **params):
-        if x1.dim() == 1:
-            mesh = torch.meshgrid(x1.flatten(), x2.flatten(), indexing='xy')
-            x, y = mesh[0].T.unsqueeze(0), mesh[1].T.unsqueeze(0)
-        elif x1.dim() == 2 and x1.shape[1] == self.number_of_input_dimensions:
-            x = torch.zeros((self.number_of_input_dimensions, x1.shape[0], x2.shape[0]), device=x1.device)
-            y = torch.zeros((self.number_of_input_dimensions, x1.shape[0], x2.shape[0]), device=x1.device)
-            for i in range(self.number_of_input_dimensions):
-                mesh = torch.meshgrid(torch.squeeze(x1[:,i]), torch.squeeze(x2[:,i]), indexing='xy')
-                x[i] = mesh[0].T
-                y[i] = mesh[1].T
+        N, M = x1.size(0), x2.size(0)
+            # 1. Separate features from indices
+            # We use .long() because indices must be integers for argsort/bincount
+        idx1 = x1[:, -1].long() #indices must be integers for argsort/bincount"
+        idx2 = x2[:, -1].long()
+        data1 = x1[:, :-1]
+        data2 = x2[:, :-1]
+        if data1.dim() == 1: #make sure data is 2D to avoid dimension issues
+            data1 = data1.unsqueeze(-1)
+        if data2.dim() == 1:
+            data2 = data2.unsqueeze(-1)
+                    # 2. Sort indices and reorder data rows
+        sort_idx1 = torch.argsort(idx1)
+        sort_idx2 = torch.argsort(idx2)
+            
+        sorted_data1 = data1[sort_idx1]
+        sorted_data2 = data2[sort_idx2]
+            
+            # 3. Get split sizes
+        counts1 = torch.bincount(idx1).tolist()
+        counts2 = torch.bincount(idx2).tolist()
+        splits1 = torch.split(sorted_data1, counts1)
+        splits2 = torch.split(sorted_data2, counts2)
         lengthscale = self.get_param('lengthscale')
-        R = self.get_param('R')
         amplitude = self.get_param('amplitude')
-        k00 = amplitude*torch.exp(-1/2*(x[0] - y[0])**2/lengthscale)
-        k01 = amplitude*(R*(x[0] - y[0]) + lengthscale)*torch.exp(-1/2*(x[0] - y[0])**2/lengthscale)/lengthscale
-        k10 = amplitude*(-R*(x[0] - y[0]) + lengthscale)*torch.exp(-1/2*(x[0] - y[0])**2/lengthscale)/lengthscale
-        k11 = amplitude*(R**2*(lengthscale - (x[0] - y[0])**2) + lengthscale**2)*torch.exp(-1/2*(x[0] - y[0])**2/lengthscale)/lengthscale**2
-        cov_m = torch.squeeze(torch.cat([
-    torch.cat([k00, k01], dim=-1),
-    torch.cat([k10, k11], dim=-1)], dim=-2))
-        cov_f = rearrange(cov_m, "(t1 w1) (t2 w2)-> (w1 t1) (w2 t2)", t1=2, t2=2)
-        return torch.diag(cov_f) if diag else cov_f
+        R = self.get_param('R')
+        def k00_fn(x, y):
+            return amplitude*torch.exp(-1/2*(x[...,0] - y[...,0])**2/lengthscale)
+        def k01_fn(x, y):
+            return amplitude*(R*(x[...,0] - y[...,0]) + lengthscale)*torch.exp(-1/2*(x[...,0] - y[...,0])**2/lengthscale)/lengthscale
+        def k10_fn(x, y):
+            return -amplitude*(R*(x[...,0] - y[...,0]) - lengthscale)*torch.exp(-1/2*(x[...,0] - y[...,0])**2/lengthscale)/lengthscale
+        def k11_fn(x, y):
+            return amplitude*(R**2*(lengthscale - (x[...,0] - y[...,0])**2) + lengthscale**2)*torch.exp(-1/2*(x[...,0] - y[...,0])**2/lengthscale)/lengthscale**2
+        function_grid = [
+            [k00_fn, k01_fn],
+            [k10_fn, k11_fn],
+        ]
+                           
+        rows = []
+        for i, s1 in enumerate(splits1):
+            row_blocks = []
+            s1_expanded = s1.unsqueeze(1)
+            for j, s2 in enumerate(splits2):
+                s2_expanded = s2.unsqueeze(0)
+                block = function_grid[i][j](s1_expanded, s2_expanded)
+                row_blocks.append(block)
+            rows.append(torch.cat(row_blocks, dim=1))
+        sorted_matrix = torch.cat(rows, dim=0)
+        # assemble kernel
+        K = torch.empty((N, M), device=x1.device, dtype=sorted_matrix.dtype)
+        K[sort_idx1[:, None], sort_idx2] = sorted_matrix
+        if diag:
+            return torch.diag(K)
+        return K
 
 
 class PCGP_Model(gpytorch.models.ExactGP):
     def __init__(self, train_x, train_y, likelihood,  parameter_modifications = {}, number_of_input_dimensions = 1, num_tasks = 2, priors = None):
         super().__init__(train_x, train_y, likelihood)
-        self.mean_module = gpytorch.means.MultitaskMean(
-            gpytorch.means.ZeroMean(), num_tasks=num_tasks 
-        )
+        self.mean_module = gpytorch.means.ZeroMean()
         self.num_tasks = num_tasks
         self.number_of_input_dimensions = number_of_input_dimensions
         self.covar_module = (
@@ -110,6 +139,6 @@ class PCGP_Model(gpytorch.models.ExactGP):
                 )
 
     def forward(self, x):
-        mean_x = self.mean_module(x)
+        mean_x = self.mean_module(x[...,0]) ##no need for task specific mean since it's zero
         covar_x = self.covar_module(x)
-        return gpytorch.distributions.MultitaskMultivariateNormal(mean_x, covar_x, interleaved = True) 
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x) 
