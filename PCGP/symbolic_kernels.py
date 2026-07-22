@@ -41,9 +41,10 @@ class symbolic_parametrization_kernel:
             else:
                 self.kernel_parameter_maps = []
                 for n in range(self.nr_of_parametrization_vectors):
-                    for sym in base_kernel_symbols:
-                        new_sym = sp.symbols(f"{sym}_{n}")
-                        self.kernel_parameter_maps.append({sym: new_sym})        
+                    self.kernel_parameter_maps.append({
+                        sym: sp.symbols(f"{sym}_{n}")
+                        for sym in base_kernel_symbols
+                    })
         else:
             amplitude, lengthscale = sp.symbols("amplitude lengthscale")
             self.base_kernel_template = amplitude * sp.exp(-1/(2*lengthscale) * sum((xi - yi)**2 for xi, yi in zip(self.x, self.y)))
@@ -175,4 +176,3 @@ class symbolic_mercer_kernel:
         else:
             mercer_kernel = sp.simplify(self.base_functions(self.x)@self.Sigma@self.base_functions(self.y).transpose())
         return mercer_kernel
-
