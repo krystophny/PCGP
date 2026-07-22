@@ -3,6 +3,8 @@ import jax
 from jax.scipy.linalg import solve_triangular
 from dataclasses import dataclass
 
+
+@jax.tree_util.register_dataclass
 @dataclass
 class KernelStructure:
     """A structure containing two tuples, ``x1`` and ``x2``. Each tuple has length ``num_tasks`` and element ``i`` contains the indices of rows in ``x1`` or ``x2`` whose task label is equal to ``i``."""
@@ -10,7 +12,31 @@ class KernelStructure:
     x2: tuple
 
 
-def build_structure(x1, x2, num_tasks):
+@jax.tree_util.register_dataclass
+@dataclass
+class PosteriorStructures:
+    """Kernel structures for the three covariance blocks of a GP posterior."""
+    train_train: KernelStructure
+    train_test: KernelStructure
+    test_test: KernelStructure
+
+
+def _resolve_num_tasks(num_tasks, num_groups):
+    if num_tasks is None:
+        num_tasks = num_groups
+    elif num_groups is not None and num_groups != num_tasks:
+        raise ValueError("num_tasks and num_groups must agree")
+    if num_tasks is None:
+        raise TypeError("num_tasks is required")
+    return num_tasks
+
+
+def _task_indices(x, num_tasks):
+    labels = jnp.asarray(x[:, -1], dtype=jnp.int32)
+    return tuple(jnp.where(labels == i)[0] for i in range(num_tasks))
+
+
+def build_structure(x1, x2, num_tasks=None, *, num_groups=None):
     """
         Constructs information on the structure of x1 and x2 necessary to precompile kernel. For x1 and x2, 
 
@@ -40,20 +66,36 @@ def build_structure(x1, x2, num_tasks):
         Groups with no assigned observations are represented by empty index
         arrays.
     """
-    idx1 = jnp.asarray(x1[:, -1], dtype=jnp.int32)
-    idx2 = jnp.asarray(x2[:, -1], dtype=jnp.int32)
-
-    x1_struct = tuple(
-        jnp.where(idx1 == i)[0]
-        for i in range(num_tasks)
+    num_tasks = _resolve_num_tasks(num_tasks, num_groups)
+    return KernelStructure(
+        _task_indices(x1, num_tasks),
+        _task_indices(x2, num_tasks),
     )
-    x2_struct = tuple(
-        jnp.where(idx2 == i)[0]
-        for i in range(num_tasks)
-    )
-    return KernelStructure(x1_struct, x2_struct)
 
-def gp_posterior_sample(key, kernel, train_x, train_y, test_x, params, sigma, jitter = 1e-6):
+
+def build_posterior_structures(train_x, test_x, num_tasks=None, *, num_groups=None):
+    """Build reusable structures for train/train, train/test, and test/test kernels."""
+    num_tasks = _resolve_num_tasks(num_tasks, num_groups)
+    train = _task_indices(train_x, num_tasks)
+    test = _task_indices(test_x, num_tasks)
+    return PosteriorStructures(
+        train_train=KernelStructure(train, train),
+        train_test=KernelStructure(train, test),
+        test_test=KernelStructure(test, test),
+    )
+
+def gp_posterior_sample(
+    key,
+    kernel,
+    train_x,
+    train_y,
+    test_x,
+    params,
+    sigma,
+    jitter=1e-6,
+    *,
+    structures=None,
+):
     """
     Returns a sample from the posterior distribution of a Gaussian process with a given kernel, parameters, and noise level, evaluated at test points test_x. The sample is drawn using the Cholesky decomposition of the posterior covariance matrix.
 
@@ -71,6 +113,9 @@ def gp_posterior_sample(key, kernel, train_x, train_y, test_x, params, sigma, ji
         For now, only a single value per parameter is supported.
     sigma : float
         Standard deviation of the Gaussian noise in the likelihood.
+    structures : PosteriorStructures, optional
+        Precomputed structures for an unbound generated kernel. Existing
+        three-argument kernels remain supported when this is omitted.
     
    
     Returns
@@ -78,9 +123,16 @@ def gp_posterior_sample(key, kernel, train_x, train_y, test_x, params, sigma, ji
     jax.numpy array
         y values of the drawn posterior sample, in the order of test_x
     """
-    K = kernel(train_x, train_x, params) + sigma**2 * jnp.eye(train_x.shape[0])
-    K_star = kernel(train_x, test_x, params)
-    K_starstar = kernel(test_x, test_x, params)
+    if structures is None:
+        K = kernel(train_x, train_x, params)
+        K_star = kernel(train_x, test_x, params)
+        K_starstar = kernel(test_x, test_x, params)
+    else:
+        K = kernel(train_x, train_x, params, structures.train_train)
+        K_star = kernel(train_x, test_x, params, structures.train_test)
+        K_starstar = kernel(test_x, test_x, params, structures.test_test)
+
+    K += sigma**2 * jnp.eye(train_x.shape[0])
     L = jnp.linalg.cholesky(K)
     
     z = solve_triangular(L, train_y, lower=True)
@@ -96,7 +148,16 @@ def gp_posterior_sample(key, kernel, train_x, train_y, test_x, params, sigma, ji
     return mu + L_post @ eps
                            
 
-def single_mll(params, train_x, train_y, sigma, kernel, prior = None):
+def single_mll(
+    params,
+    train_x,
+    train_y,
+    sigma,
+    kernel,
+    prior=None,
+    *,
+    structure=None,
+):
     """
     Calculates the marginal log likelihood for a given set of parameters, data, and a specific kernel. Priors are optional and result in an unnormalized log likelihood.
     Formula: -0.5 * (y.T @ K_inv @ y + log|K| + N*log(2pi)) (+log(prior) if provided)
@@ -115,13 +176,19 @@ def single_mll(params, train_x, train_y, sigma, kernel, prior = None):
         Gaussian process kernel
     prior : dict of jax.numpy arrays, optional
         A dictionary containing the priors for the parameters, where each key is the parameter name and the value is a jax.numpy array representing the prior's value in the same order as the values in params. If provided, the log of
+    structure : KernelStructure, optional
+        Precomputed structure for an unbound generated kernel. Existing
+        three-argument kernels remain supported when this is omitted.
 
     Returns
     -------
     jax.numpy array
         marginal log likelihood
     """
-    K = kernel(train_x, train_x, params)
+    if structure is None:
+        K = kernel(train_x, train_x, params)
+    else:
+        K = kernel(train_x, train_x, params, structure)
     N = K.shape[0]
     K += sigma**2 * jnp.eye(N)
     L = jnp.linalg.cholesky(K)
@@ -144,6 +211,33 @@ def single_mll(params, train_x, train_y, sigma, kernel, prior = None):
             mll += jnp.log(prior[key])
     return mll
 
-mll = jax.vmap(single_mll, in_axes=(0, None, None, None, None))
+_legacy_mll = jax.vmap(single_mll, in_axes=(0, None, None, None, None))
 
 
+def _single_mll_with_structure(
+    params, train_x, train_y, sigma, kernel, prior, structure
+):
+    return single_mll(
+        params,
+        train_x,
+        train_y,
+        sigma,
+        kernel,
+        prior,
+        structure=structure,
+    )
+
+
+_structured_mll = jax.vmap(
+    _single_mll_with_structure,
+    in_axes=(0, None, None, None, None, None, None),
+)
+
+
+def mll(params, train_x, train_y, sigma, kernel, prior=None, *, structure=None):
+    """Vectorize :func:`single_mll` over the leading parameter dimension."""
+    if prior is None and structure is None:
+        return _legacy_mll(params, train_x, train_y, sigma, kernel)
+    return _structured_mll(
+        params, train_x, train_y, sigma, kernel, prior, structure
+    )
