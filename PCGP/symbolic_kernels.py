@@ -32,16 +32,18 @@ class symbolic_parametrization_kernel:
             self.expanded_BinBjn[n] = sp.expand(self.Bx[:, n] * self.By[:, n].T)
         #build base kernel and parameter maps for the different parametrization vectors:
         if base_kernel:
-            base_kernel_symbols = base_kernel(self.x, self.y).free_symbols- set(self.x)- set(self.y)
+            base_kernel_symbols = (
+                base_kernel(self.x, self.y).free_symbols - set(self.x) - set(self.y)
+            )
             self.base_kernel_template = base_kernel(self.x, self.y)
             if shared_base_kernel:
                 self.kernel_parameter_maps = [
-                {sym: sym for sym in base_kernel_symbols}
+                {sym: sym for sym in sorted(base_kernel_symbols, key=str)}
                     for _ in range(self.nr_of_parametrization_vectors)]
             else:
                 self.kernel_parameter_maps = []
                 for n in range(self.nr_of_parametrization_vectors):
-                    for sym in base_kernel_symbols:
+                    for sym in sorted(base_kernel_symbols, key=str):
                         new_sym = sp.symbols(f"{sym}_{n}")
                         self.kernel_parameter_maps.append({sym: new_sym})        
         else:
@@ -61,9 +63,15 @@ class symbolic_parametrization_kernel:
                         lengthscale: ls_n})
         #automatically define all symbols that are not inputs or derivatives as parameters
         base_kernel_symbols = set().union(*(mapping.values() for mapping in self.kernel_parameter_maps))
-        self.parameters = { 
-            str(sym): None
-            for sym in (base_kernel_symbols.union(self.Bx.free_symbols) - set(self.Dx)- set(self.x)- set(self.y))}
+        parameter_symbols = (
+            base_kernel_symbols.union(self.Bx.free_symbols)
+            - set(self.Dx)
+            - set(self.x)
+            - set(self.y)
+        )
+        self.parameters = {
+            str(sym): None for sym in sorted(parameter_symbols, key=str)
+        }
         
 
     def get_symbolic_kernel(self): 
@@ -158,12 +166,12 @@ class symbolic_mercer_kernel:
         self.Sigma = Sigma
         self.x = sp.symbols(f'x1:{number_of_input_dimensions + 1}')  # creates (x1, x2,..)
         self.y = sp.symbols(f'y1:{number_of_input_dimensions + 1}')  
-        self.parameters = {
-            str(sym): None
-            for sym in (
+        parameter_symbols = (
                 self.base_functions(self.x).free_symbols
                 - set(self.x)
-            )
+        )
+        self.parameters = {
+            str(sym): None for sym in sorted(parameter_symbols, key=str)
         }
     
     def get_symbolic_kernel(self): 
@@ -175,4 +183,3 @@ class symbolic_mercer_kernel:
         else:
             mercer_kernel = sp.simplify(self.base_functions(self.x)@self.Sigma@self.base_functions(self.y).transpose())
         return mercer_kernel
-

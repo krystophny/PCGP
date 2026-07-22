@@ -134,7 +134,7 @@ class PCGP_Builder_jax:
         params = set()
         for k in self.kernels:
             params.update(k.parameters)
-        return list(params)
+        return sorted(params)
     
     def _generate_kernel_specifics(
         self,
@@ -252,6 +252,5 @@ class PCGP_Builder_jax:
         with open(file_path, "w") as f:
             f.write(rendered)
         print(f"Kernel and model written to: {file_path}")
-
 
 
