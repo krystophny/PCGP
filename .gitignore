@@ -1,6 +1,16 @@
-# Python compiled files
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+build/
+dist/
+*.egg-info/
+
+# macOS
+.DS_Store
+._.DS_Store
 
 # VSCode settings
 .vscode/
